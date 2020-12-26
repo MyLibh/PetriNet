@@ -243,6 +243,7 @@ void AddMarker(Assets& assets, std::vector<Marker>& markers, sf::Vector2f pos)
     text.setFillColor(sf::Color::Magenta);
     text.setCharacterSize(15);
     text.setStyle(sf::Text::Bold);
+    text.setOutlineColor(sf::Color::Black);
 
     sf::CircleShape circle(R);
     circle.setPosition(pos);
