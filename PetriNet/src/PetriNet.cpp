@@ -53,6 +53,16 @@ void PetriNet::generateMarkersDuration() noexcept
 	std::for_each(std::begin(m_markers), std::end(m_markers), [&](Marker& marker) { generateMarkerDuration(marker); });
 }
 
+void PetriNet::printEndCondition()
+{
+	if (m_all_blocked)
+		std::cerr << "All markers are blocked\n";
+	else if (detail::DurationHasPassed(*this))
+		std::cerr << "Time is over\n";
+	else if (m_markers.empty())
+		std::cerr << "All markers deleted\n";
+}
+
 std::vector<size_t> PetriNet::getReadyInputMarkers(const size_t transitionIdx)
 {
 	std::vector<size_t> inputMarkers;
@@ -138,13 +148,10 @@ void PetriNet::moveMarkers(const size_t transitionIdx, std::ofstream& ofstr)
 	}
 }
 
-void PetriNet::updateMarker()
+void PetriNet::updateMarkers()
 {
-	while (!m_finished && !m_markers.empty() && !detail::DurationHasPassed(*this))
+	while (!m_all_blocked && !m_markers.empty() && !detail::DurationHasPassed(*this))
 	{
-		while (m_main);
-		m_queue_ready = false;
-		
 		std::lock_guard lock(m_markers_lock);
 		std::lock_guard queue_lock(m_queue_lock);
 		for (size_t i{}; i < m_markers.size(); ++i)
@@ -155,11 +162,7 @@ void PetriNet::updateMarker()
 			if (detail::DurationHasPassed(m_markers.at(i)))
 				m_updateQueue.push_back(i);
 		}
-
-		m_queue_ready = !m_updateQueue.empty();
 	}
-
-	m_queue_ready = true;
 }
 
 void PetriNet::updateTransitions(std::ofstream& ofstr)
@@ -180,58 +183,56 @@ void PetriNet::updateTransitions(std::ofstream& ofstr)
 			if (out[i])
 				marker.addTransition(i);
 
-		if (marker.getTransitions().empty())
+		if (marker.getTransitions().empty() && !marker.isBlocked())
+		{
+			marker.setBlocked(true);
+
 			ofstr << detail::MakeLogStr(m_timePoint, marker.getId(), "X");
+		}
 	}
 }
 
 void PetriNet::performTransitions(std::ofstream& ofstr)
 {
-	while (!m_finished && !m_markers.empty() && !detail::DurationHasPassed(*this))
+	while (!m_all_blocked && !m_markers.empty() && !detail::DurationHasPassed(*this))
 	{
-		while (!m_queue_ready);
-		m_main = true;
-
 		updateTransitions(ofstr);
-		m_markers_lock.lock();
-		m_queue_lock.lock();
 
-		std::set<size_t> used;
 		std::vector<std::thread> threads;
-		for (const auto& markerIdx : m_updateQueue)
 		{
-			const auto& transitions = m_markers.at(markerIdx).getTransitions();
-
-			std::vector<size_t> possibleTransitions;
-			std::copy_if(std::begin(transitions), std::end(transitions), std::back_inserter(possibleTransitions),
-				[&](const size_t idx) { return !used.contains(idx); });
-			if (!possibleTransitions.empty())
+			std::lock_guard lock(m_markers_lock);
+			std::set<size_t> used;
 			{
-				const auto it = SelectRandomly(possibleTransitions);
-				threads.emplace_back([&, transitionIdx = *it]() { moveMarkers(transitionIdx, ofstr); });
+				std::lock_guard queu_lock(m_queue_lock);
+				for (const auto& markerIdx : m_updateQueue)
+				{
+					const auto& transitions = m_markers.at(markerIdx).getTransitions();
 
-				used.insert(*it);
+					std::vector<size_t> possibleTransitions;
+					std::copy_if(std::begin(transitions), std::end(transitions), std::back_inserter(possibleTransitions),
+						[&](const size_t idx) { return !used.contains(idx); });
+					if (!possibleTransitions.empty())
+					{
+						const auto it = SelectRandomly(possibleTransitions);
+						threads.emplace_back([&, transitionIdx = *it]() { moveMarkers(transitionIdx, ofstr); });
+
+						used.insert(*it);
+					}
+
+					if (std::size(threads) + 1 == std::thread::hardware_concurrency())
+						break;
+				}
 			}
 
-			if (std::size(threads) + 1 == std::thread::hardware_concurrency())
-				break;
+			if (used.empty() && std::find_if(std::begin(m_markers), std::end(m_markers), [](const Marker& marker) { return !marker.isBlocked();}) == std::end(m_markers))
+				m_all_blocked = true;
 		}
-		m_queue_lock.unlock();
-		m_markers_lock.unlock();
-
-		if (used.empty())
-			m_finished = true;
-
-		m_main = false;
 
 		for (auto& thread : threads)
 			thread.join();
 	}
 
-	if (m_finished)
-		std::cerr << "All markers are blocked\n";
-	else if (detail::DurationHasPassed(*this))
-		std::cerr << "Time is over\n";
+	printEndCondition();
 }
 
 void PetriNet::run(std::chrono::seconds duration, std::ofstream& ofstr)
@@ -241,7 +242,7 @@ void PetriNet::run(std::chrono::seconds duration, std::ofstream& ofstr)
 	m_timePoint = detail::TimeNow();
 	m_duration = duration;
 
-	std::thread updater([&]() { updateMarker(); });
+	std::thread updater([&]() { updateMarkers(); });
 	std::thread transiter([&]() { performTransitions(ofstr); });
 
 	updater.join();

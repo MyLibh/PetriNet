@@ -16,13 +16,15 @@ private:
 
 	void generateMarkersDuration() noexcept;
 
+	void printEndCondition();
+
 	std::vector<size_t> getReadyInputMarkers(const size_t transitionIdx);
 
 	void deleteMarkers(std::vector<size_t>& markers, std::ofstream& ofstr);
 
 	void moveMarkers(const size_t transitionIdx, std::ofstream& ofstr);
 
-	void updateMarker();
+	void updateMarkers();
 
 	void updateTransitions(std::ofstream& ofstr);
 
@@ -64,9 +66,7 @@ private:
 
 	std::mutex       m_markers_lock;
 	std::mutex       m_queue_lock;
-	std::atomic_bool m_finished;
-	std::atomic_bool m_queue_ready;
-	std::atomic_bool m_main;
+	std::atomic_bool m_all_blocked;
 
 	time_point_t m_timePoint;
 	duration_t   m_duration;

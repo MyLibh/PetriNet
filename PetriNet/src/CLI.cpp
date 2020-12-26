@@ -28,7 +28,7 @@ void CLI::run(PetriNet& petriNet)
 {
 	std::ofstream ofstr("output.txt");
 
-	const size_t duration = Input<size_t>("duration");
+	const auto duration = Input<size_t>("duration");
 	petriNet.run(std::chrono::seconds(duration), ofstr);
 
 	ofstr.close();

@@ -12,6 +12,7 @@ private:
 
 public:
 	inline explicit Marker(const size_t position) noexcept :
+		m_blocked{},
 		m_id(Marker::ID++),
 		m_pos(position),
 		m_duration{}
@@ -27,6 +28,10 @@ public:
 
 	[[nodiscard]] inline constexpr auto getDuration() const noexcept { return m_duration; }
 
+	inline constexpr bool isBlocked() const noexcept { return m_blocked; }
+
+	void setBlocked(const bool value) noexcept { m_blocked = value; }
+
 	void setPosition(const size_t position) noexcept { m_pos = position; }
 
 	void setTimePoint(const time_point_t& timePoint) noexcept { m_timePoint = timePoint; }
@@ -38,6 +43,7 @@ public:
 	inline void clearTransitions() noexcept { m_transitions.clear(); };
 
 private:
+	bool                m_blocked;
 	size_t              m_id;
 	size_t              m_pos;
 	std::vector<size_t> m_transitions;

@@ -5,8 +5,7 @@
 
 #include <fstream>
 #include <sstream>
-#include <thread>
-#include <chrono>
+#include <iostream>
 
 struct Assets
 {
@@ -102,13 +101,19 @@ auto main() -> int
     const auto edges = CreateEdges();
     auto markers = CreateMarkers(assets);
 
+    std::cout << "Configuration:\n"
+        << std::size(positions) << " positions\n"
+        << std::size(transitions) << " transitions\n"
+        << std::size(edges) << " edges\n"
+        << std::size(markers) << " markers\n\n";
+
     sf::RenderWindow window(sf::VideoMode(800, 600), "PetriNet Visualization");
     while (window.isOpen())
     {
         sf::Event event;
         while (window.pollEvent(event))
         {
-            if (event.type == sf::Event::Closed)
+            if (event.type == sf::Event::Closed || event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
                 window.close();
             else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Space)
             {
@@ -116,6 +121,8 @@ auto main() -> int
                 std::getline(ifstr, str);
                 if (!str.empty())
                 {
+                    std::cout << str << std::endl;
+
                     size_t markerIdx{};
                     std::stringstream(str.substr(str.find_first_of('<') + 1)) >> markerIdx;
 
@@ -135,8 +142,6 @@ auto main() -> int
                 }
             }
         }
-
-        
 
         window.clear(sf::Color::White);
 
